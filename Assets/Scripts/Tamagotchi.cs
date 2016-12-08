@@ -5,16 +5,14 @@ public class Tamagotchi : MonoBehaviour {
 
     private SpriteRenderer sprite;
     private Animator anim;
-    private readonly DateTime _start = DateTime.Now;
-    private readonly float changeFactor = 1f;
-    private readonly float threshold = 30f;    
+    private Transform form;
+    private GameController controller;
+    private readonly DateTime _start = DateTime.Now;    
+    private readonly float threshold = 50f;    
 
     public float Hunger { get; private set; }    
     public float Boredom { get; private set; }
-    public float Weight { get; private set; }    
-    public float Tiredness { get; private set; }    
-    public bool IsSleeping { get; private set; }
-    public bool IsDead { get; private set; }
+    public float Weight { get; private set; }        
 
     public int Age
     {
@@ -39,50 +37,80 @@ public class Tamagotchi : MonoBehaviour {
         }
     }
 
+    public float HungerMultiplier
+    {
+        get
+        {
+            return this.Hunger / this.threshold;
+        }
+    }
+
+    public float WeightMultiplier
+    {
+        get
+        {
+            var value = this.Weight / this.threshold;
+
+            if (value < 0.5f) return 0.5f;
+
+            if (value > 2.5f) return 2.5f;
+
+            return value;
+        }
+    }
+
     // Use this for initialization
     void Start ()
-    {
-        this.Hunger = 31f;        
-        this.Boredom = 32f;        
-        this.Weight = 10f;        
-        this.Tiredness = 50f;
-        this.IsSleeping = false;
-        this.IsDead = false;        
+    {                          
         this.sprite = gameObject.GetComponent<SpriteRenderer>();
         this.anim = gameObject.GetComponent<Animator>();
-
-        InvokeRepeating("living", 0, 1f);        
+        this.form = gameObject.GetComponent<Transform>();
+        this.controller = GameObject.FindObjectOfType<GameController>();
 	}
 	
 	// Update is called once per frame
 	void Update ()
-    {        
-        this.controlColor();
-        this.isItDead();
+    {
+        if(!this.controller.IsDead)
+        {
+            this.runDisplays();
+            this.living();
+            this.winConditions();
+        }
 
         Debug.Log("Hunger " + this.Hunger);
         Debug.Log("Boredom " + this.Boredom);
-
-        this.anim.SetFloat("BoredomMultiplier", this.BoredomMultiplier);        
+        Debug.Log("Weight " + this.Weight);             
 	}
 
     public void FeedPet()
     {
         this.affectHunger(-20f);
+        this.affectWeight(-20f);
+        this.affectBoredom(10f);
     }
 
     public void PlayPet()
     {
         this.affectBoredom(-20f);
+        this.affectWeight(10f);
+        this.affectHunger(10f);
     }
+
+    public void GameReset()
+    {
+        this.Hunger = 55f;
+        this.Boredom = 55f;
+        this.Weight = 55f;        
+    }   
 
     private void living()
     {
-        this.affectHunger(this.changeFactor);
+        this.affectHunger(Time.deltaTime);
 
-        this.affectTiredness(this.changeFactor);
+        this.affectWeight(-Time.deltaTime);
 
-        this.affectBoredom(this.changeFactor);
+        this.affectBoredom(Time.deltaTime);
     }
 
     private void affectHunger(float affectHunger)
@@ -90,38 +118,93 @@ public class Tamagotchi : MonoBehaviour {
         this.Hunger -= affectHunger;
     }
 
-    private void affectTiredness(float affectTiredness)
+    private void affectWeight(float affectWeight)
     {
-        this.Tiredness -= affectTiredness;
+        this.Weight -= affectWeight;
     }
 
     private void affectBoredom(float affectBoredom)
     {
         this.Boredom -= affectBoredom;
-    }    
-
-    private void controlColor()
+    }  
+    
+    private void runDisplays()
     {
-        if(this.Hunger < this.threshold)
+        this.hungerDisplay();
+        this.weightDisplay();
+        this.boredomDisplay();
+    }  
+
+    private void hungerDisplay()
+    {
+        if (this.Hunger < this.threshold)
         {         
             var color = this.sprite.color;
-            color.g = (this.Hunger / this.threshold);
-            color.b = (this.Hunger / this.threshold);
+            color.g = (this.HungerMultiplier);
+            color.b = (this.HungerMultiplier);
             this.sprite.color = color;
         }
         else
         {
             this.sprite.color = Color.white;
         }        
+    }    
+
+    private void weightDisplay()
+    {
+        var newScale = new Vector3(this.WeightMultiplier, this.WeightMultiplier, 1f);
+        this.form.localScale = newScale;
     }
 
-    private void controlMotion()
-    {                
-        this.sprite.flipX = !this.sprite.flipX;        
+    private void boredomDisplay()
+    {
+        this.anim.SetFloat("BoredomMultiplier", this.BoredomMultiplier);
+    }
+
+    private void winConditions()
+    {
+        this.isItDead();
+        this.didItWin();
     }
 
     private void isItDead()
     {
-        if (this.Hunger <= 0) this.IsDead = true;
+        if (this.Hunger <= 0)
+        {            
+            this.controller.GameOver(0, "It died of hunger!");
+        }
+
+        if (this.Hunger >= 100)
+        {         
+            this.controller.GameOver(0, "It died of too much food!");
+        }
+
+        if (this.Weight <= 0)
+        {         
+            this.controller.GameOver(0, "It wasted away!");
+        }
+
+        if (this.Weight >= 100)
+        {         
+            this.controller.GameOver(0, "It got too fat!");
+        }
+
+        if (this.Boredom <= 0)
+        {         
+            this.controller.GameOver(0, "It was bored too death!");
+        }
+
+        if (this.Boredom >= 100)
+        {         
+            this.controller.GameOver(0, "It got too excited and exploded!");
+        }   
+    }
+
+    private void didItWin()
+    {
+        if (this.Age == 6)
+        {            
+            this.controller.GameOver(1, "You got to 6!");
+        }
     }
 }
